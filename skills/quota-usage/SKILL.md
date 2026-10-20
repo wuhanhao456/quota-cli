@@ -13,10 +13,6 @@ required_environment_variables:
     prompt: Ollama Cloud API key (optional)
     help: Create one at https://ollama.com/settings/keys. Skip if you don't use Ollama Cloud.
     required_for: Ollama Cloud quota only
-  - name: OLLAMA_COOKIE
-    prompt: Ollama browser Cookie header (optional, older plans only)
-    help: For legacy Ollama plans with session/weekly limits. Copy the Cookie request header of https://ollama.com/settings from browser dev tools. See references/setup.md.
-    required_for: Ollama session/weekly percentages on older plans
   - name: OPENCODE_API_KEY
     prompt: OpenCode Go API key (optional)
     help: Only needed if opencode is not logged in on this machine. Get one at https://opencode.ai/auth.
@@ -91,7 +87,7 @@ on a server, that is the server). Per-service steps are in [references/setup.md]
 | Claude | Claude Code logged in (`~/.claude/.credentials.json`) |
 | ChatGPT | Codex CLI logged in with ChatGPT (`~/.codex/auth.json`) |
 | Command Code | `cmd login` (`~/.commandcode/auth.json`) or `COMMANDCODE_API_KEY` |
-| Ollama Cloud | `OLLAMA_API_KEY`; older plans with session/weekly limits also need `OLLAMA_COOKIE` (or `~/.config/quota-cli/ollama-cookie`) |
+| Ollama Cloud | `OLLAMA_API_KEY` (legacy plans get session/weekly percentages, current plans the monthly allowance) |
 | OpenCode Go | `opencode auth login` → OpenCode Go (`~/.local/share/opencode/opencode.db`) or `OPENCODE_API_KEY` |
 
 ## Pitfalls

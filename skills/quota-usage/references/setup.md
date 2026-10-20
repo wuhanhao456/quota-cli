@@ -71,25 +71,8 @@ or create an API key in Command Code settings and expose it to Hermes as
 2. Put it in `~/.hermes/.env` as `OLLAMA_API_KEY=...` (or run `hermes setup`). Hermes passes
    it through to the terminal because this skill declares it.
 
-### Older plans (session / weekly percentages)
-
-Legacy Ollama plans are metered as session (or hourly) and weekly percentages instead of a
-monthly dollar allowance. The API key cannot read those; `quota` reads them from the signed-in
-settings page using your browser cookie:
-
-1. Sign in at https://ollama.com in a desktop browser and open https://ollama.com/settings.
-2. Open dev tools (F12) → **Network**, reload the page, click the `settings` document request.
-3. Under **Request Headers**, copy the whole value of `Cookie` (one long line).
-4. Save it on the machine where `quota` runs, either as a file (preferred):
-   ```bash
-   mkdir -p ~/.config/quota-cli && nano ~/.config/quota-cli/ollama-cookie && chmod 600 ~/.config/quota-cli/ollama-cookie
-   ```
-   (Windows: `%USERPROFILE%\.config\quota-cli\ollama-cookie`), or as `OLLAMA_COOKIE=...` in
-   `~/.hermes/.env`. A leading `Cookie:` is fine.
-
-The cookie is only sent to ollama.com and never printed. It expires when you sign out or after
-a while; on `session cookie expired`, copy a fresh one. Keep `OLLAMA_API_KEY` too if you have
-purchased credits: with both set, meters come from the page and the credit balance from the API.
+Legacy Pro/Max plans show session and weekly percentages; current plans show the monthly
+included allowance. Both come from the same key.
 
 ## OpenCode Go
 
@@ -117,8 +100,6 @@ is not covered.
 | `no Codex CLI login found` / `has no ChatGPT tokens` | `codex login` with a ChatGPT account. |
 | `HTTP 401 (credentials rejected or expired)` | Re-run that tool's CLI or log in again. |
 | `set OLLAMA_API_KEY` | Add the key to `~/.hermes/.env`. |
-| `Ollama session cookie expired` | Copy a fresh `Cookie` header from ollama.com/settings (see above). |
-| `no usage meters found on the Ollama settings page` | Ollama changed the page; update `quota`. |
 | `no OpenCode Go key found` | `opencode auth login` (OpenCode Go) or set `OPENCODE_API_KEY`. |
 | `no OpenCode Go usage in the response` | The key's workspace has no Go subscription; use a key from the subscribed workspace. |
 | `unexpected response` | The service changed its API; update `quota`. |

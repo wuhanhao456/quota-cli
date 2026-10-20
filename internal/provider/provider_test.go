@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"testing"
 	"time"
 )
@@ -17,7 +16,7 @@ func fakeHome(t *testing.T, files map[string]string) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	for _, env := range []string{"CLAUDE_CONFIG_DIR", "CLAUDE_OAUTH_TOKEN", "CODEX_HOME", "COMMANDCODE_API_KEY", "COMMAND_CODE_API_KEY", "CMD_API_KEY", "OLLAMA_API_KEY", "OLLAMA_COOKIE", "OPENCODE_API_KEY", "OPENCODE_GO_API_KEY", "OPENCODE_DB", "XDG_DATA_HOME"} {
+	for _, env := range []string{"CLAUDE_CONFIG_DIR", "CLAUDE_OAUTH_TOKEN", "CODEX_HOME", "COMMANDCODE_API_KEY", "COMMAND_CODE_API_KEY", "CMD_API_KEY", "OLLAMA_API_KEY", "OPENCODE_API_KEY", "OPENCODE_GO_API_KEY", "OPENCODE_DB", "XDG_DATA_HOME"} {
 		t.Setenv(env, "")
 	}
 	for rel, body := range files {
@@ -195,93 +194,25 @@ func TestOllama(t *testing.T) {
 	}
 }
 
-const ollamaLegacyHTML = `<div>
-  <h2><span>Cloud Usage</span>
-    <span class="capitalize">pro</span></h2>
-  <h2 id="header-email">me@example.com</h2>
-  <div><span>Session usage</span><span>12.5% used</span>
-    <div class="local-time" data-time="2026-10-20T18:00:00Z">Resets in 3 hours</div></div>
-  <div><span>Weekly usage</span><span>40% used</span>
-    <div style="width: 40%"></div>
-    <div class="local-time" data-time="2026-10-26T00:00:00Z">Resets in 6 days</div></div>
-</div>`
-
-func TestOllamaLegacyCookie(t *testing.T) {
-	fakeHome(t, map[string]string{".config/quota-cli/ollama-cookie": "Cookie: __Secure-session=abc\n"})
-	var cookie string
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie = r.Header.Get("Cookie")
-		w.Write([]byte(ollamaLegacyHTML))
-	}))
-	defer srv.Close()
-	ollamaSettingsURL = srv.URL + "/settings"
+// Legacy Pro/Max plans report session and weekly limits as remaining percentages.
+func TestOllamaLegacy(t *testing.T) {
+	fakeHome(t, nil)
+	t.Setenv("OLLAMA_API_KEY", "okey")
+	srv, _ := serve(t, map[string]string{"/api/balance": `{
+		"included":{"session":{"remaining_percent":96.5,"resets_at":"2026-10-20T18:00:00Z"},
+		            "weekly":{"remaining_percent":"60","resets_at":"2026-10-26T00:00:00Z"}},
+		"purchased":{"balance_usd":0}}`})
+	ollamaBalanceURL = srv.URL + "/api/balance"
 
 	r := Run(context.Background(), srv.Client(), All()[3])
-	if r.Status != "ok" || cookie != "__Secure-session=abc" || r.Plan != "Pro" || r.Account != "me@example.com" || r.Source != "cookie" {
-		t.Fatalf("got %+v cookie=%q", r, cookie)
+	if r.Status != "ok" || len(r.Windows) != 2 {
+		t.Fatalf("got %+v", r)
 	}
-	if w := window(t, r, "session"); w.UsedPercent != 12.5 || w.ResetsAt == nil || w.ResetsAt.Hour() != 18 {
+	if w := window(t, r, "session"); w.UsedPercent < 3.49 || w.UsedPercent > 3.51 || w.ResetsAt == nil || w.ResetsAt.Hour() != 18 {
 		t.Fatalf("session = %+v", w)
 	}
 	if w := window(t, r, "weekly"); w.UsedPercent != 40 || w.ResetsAt == nil || w.ResetsAt.Day() != 26 {
 		t.Fatalf("weekly = %+v", w)
-	}
-	if len(r.Windows) != 2 {
-		t.Fatalf("windows = %+v", r.Windows)
-	}
-}
-
-// With both credentials the page supplies the meters and the API adds purchased credits.
-func TestOllamaCookieAndKey(t *testing.T) {
-	fakeHome(t, nil)
-	t.Setenv("OLLAMA_COOKIE", "wos-session=xyz")
-	t.Setenv("OLLAMA_API_KEY", "okey")
-	srv, _ := serve(t, map[string]string{
-		"/settings":    ollamaLegacyHTML,
-		"/api/balance": `{"purchased":{"balance_usd":"7.5"}}`,
-	})
-	ollamaSettingsURL = srv.URL + "/settings"
-	ollamaBalanceURL = srv.URL + "/api/balance"
-
-	r := Run(context.Background(), srv.Client(), All()[3])
-	if r.Status != "ok" || r.Source != "cookie+api-key" || len(r.Windows) != 2 {
-		t.Fatalf("got %+v", r)
-	}
-	if len(r.Details) != 1 || r.Details[0].Value != "$7.50" {
-		t.Fatalf("details = %+v", r.Details)
-	}
-}
-
-func TestOllamaMonthlyPage(t *testing.T) {
-	r := &Report{}
-	html := `<h2><span>Included usage</span><span class="x"
-  >max</span
-></h2><div><span>Monthly usage</span><span>$15 of $60 used</span>
-<div class="local-time" data-time="2026-11-01T00:00:00Z">Resets in 12 days</div></div>`
-	if err := parseOllamaSettings(html, r); err != nil {
-		t.Fatal(err)
-	}
-	if w := window(t, *r, "monthly"); w.UsedPercent != 25 || *w.Remaining != 45 || w.ResetsAt == nil || r.Plan != "Max" {
-		t.Fatalf("got %+v", r)
-	}
-}
-
-func TestOllamaExpiredCookie(t *testing.T) {
-	fakeHome(t, nil)
-	t.Setenv("OLLAMA_COOKIE", "abc")
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/settings" {
-			http.Redirect(w, r, "/signin", http.StatusFound)
-			return
-		}
-		w.Write([]byte(`<form action="/signin"><h1>Sign in to Ollama</h1></form>`))
-	}))
-	defer srv.Close()
-	ollamaSettingsURL = srv.URL + "/settings"
-
-	r := Run(context.Background(), srv.Client(), All()[3])
-	if r.Status != "error" || !strings.Contains(r.Error, "expired") {
-		t.Fatalf("got %+v", r)
 	}
 }
 
