@@ -94,3 +94,15 @@ func TestOpenCodeNoSubscription(t *testing.T) {
 		t.Fatalf("got %+v", r)
 	}
 }
+
+func TestOpenCodeDBOverrideIsExclusive(t *testing.T) {
+	fakeHome(t, nil)
+	home, _ := os.UserHomeDir()
+	dir := filepath.Join(home, ".local", "share", "opencode")
+	os.MkdirAll(dir, 0o755)
+	os.WriteFile(filepath.Join(dir, "opencode.db"), nil, 0o600)
+	t.Setenv("OPENCODE_DB", filepath.Join(home, "other.db"))
+	if got := openCodeDBPaths(dir); len(got) != 1 || got[0] != filepath.Join(home, "other.db") {
+		t.Fatalf("paths = %v", got)
+	}
+}

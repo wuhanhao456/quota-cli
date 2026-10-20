@@ -67,14 +67,17 @@ func openCodeKey() (openCodeCred, error) {
 }
 
 func openCodeDBPaths(dir string) []string {
-	var paths []string
-	if p := firstEnv("OPENCODE_DB"); p != "" && p != ":memory:" {
+	// An explicit OPENCODE_DB is the only database opencode uses, so never fall back past it.
+	if p := firstEnv("OPENCODE_DB"); p != "" {
+		if p == ":memory:" {
+			return nil
+		}
 		if !filepath.IsAbs(p) {
 			p = filepath.Join(dir, p)
 		}
-		paths = append(paths, p)
+		return []string{p}
 	}
-	paths = append(paths, filepath.Join(dir, "opencode.db"))
+	paths := []string{filepath.Join(dir, "opencode.db")}
 	// Non-stable channels use opencode-<channel>.db.
 	channels, _ := filepath.Glob(filepath.Join(dir, "opencode-*.db"))
 	sort.Strings(channels)
