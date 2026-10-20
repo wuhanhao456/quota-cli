@@ -1,0 +1,5 @@
+/dist/
+/quota
+/quota.exe
+*.png
+!examples/*.png
