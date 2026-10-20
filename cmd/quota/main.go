@@ -1,5 +1,5 @@
 // Command quota collects subscription usage and remaining quota for Claude, ChatGPT (Codex),
-// Command Code and Ollama Cloud, using credentials already on this machine.
+// Command Code, Ollama Cloud and OpenCode Go, using credentials already on this machine.
 package main
 
 import (
@@ -122,6 +122,9 @@ func selectProviders(list string) ([]provider.Provider, error) {
 		id = strings.ToLower(strings.TrimSpace(id))
 		if id == "codex" || id == "openai" {
 			id = "chatgpt"
+		}
+		if id == "opencode-go" || id == "opencodego" {
+			id = "opencode"
 		}
 		found := false
 		for _, p := range all {

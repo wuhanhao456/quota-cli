@@ -53,6 +53,7 @@ var accents = map[string]color.Color{
 	"chatgpt":     hex("#10A37F"),
 	"commandcode": hex("#8B7CF6"),
 	"ollama":      hex("#C9D1D9"),
+	"opencode":    hex("#F5A742"),
 }
 
 type fonts struct{ title, name, label, value, small, badge font.Face }

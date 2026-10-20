@@ -1,11 +1,11 @@
 ---
 name: quota-usage
-description: Check remaining subscription quota and usage for Claude, ChatGPT (Codex), Command Code and Ollama Cloud with the `quota` CLI. Use when the user asks how much quota, credit or usage is left, when a limit resets, or wants a usage dashboard image.
+description: Check remaining subscription quota and usage for Claude, ChatGPT (Codex), Command Code, Ollama Cloud and OpenCode Go with the `quota` CLI. Use when the user asks how much quota, credit or usage is left, when a limit resets, or wants a usage dashboard image.
 version: 0.1.0
 platforms: [linux, macos, windows]
 metadata:
   hermes:
-    tags: [quota, usage, billing, claude, codex, chatgpt, ollama, commandcode]
+    tags: [quota, usage, billing, claude, codex, chatgpt, ollama, commandcode, opencode]
     category: devops
     requires_toolsets: [terminal]
 required_environment_variables:
@@ -17,6 +17,10 @@ required_environment_variables:
     prompt: Ollama browser Cookie header (optional, older plans only)
     help: For legacy Ollama plans with session/weekly limits. Copy the Cookie request header of https://ollama.com/settings from browser dev tools. See references/setup.md.
     required_for: Ollama session/weekly percentages on older plans
+  - name: OPENCODE_API_KEY
+    prompt: OpenCode Go API key (optional)
+    help: Only needed if opencode is not logged in on this machine. Get one at https://opencode.ai/auth.
+    required_for: OpenCode Go quota only
 ---
 
 # Subscription quota (quota-cli)
@@ -27,7 +31,7 @@ It never prints tokens.
 
 ## When to Use
 
-- "How much Claude / Codex / Command Code / Ollama quota do I have left?"
+- "How much Claude / Codex / Command Code / Ollama / OpenCode quota do I have left?"
 - "When does my weekly limit reset?", "Am I close to my limit?"
 - "Send me a usage screenshot / dashboard."
 - Before starting a long task, to pick a provider that still has headroom.
@@ -39,7 +43,7 @@ It never prints tokens.
    ```bash
    quota --json
    ```
-   Limit to some providers with `--providers claude,chatgpt,commandcode,ollama`.
+   Limit to some providers with `--providers claude,chatgpt,commandcode,ollama,opencode`.
 3. If the user wants an image, render one in the same run and deliver it by putting its
    absolute path on its own line in the reply (the gateway sends it as a photo):
    ```bash
@@ -88,6 +92,7 @@ on a server, that is the server). Per-service steps are in [references/setup.md]
 | ChatGPT | Codex CLI logged in with ChatGPT (`~/.codex/auth.json`) |
 | Command Code | `cmd login` (`~/.commandcode/auth.json`) or `COMMANDCODE_API_KEY` |
 | Ollama Cloud | `OLLAMA_API_KEY`; older plans with session/weekly limits also need `OLLAMA_COOKIE` (or `~/.config/quota-cli/ollama-cookie`) |
+| OpenCode Go | `opencode auth login` → OpenCode Go (`~/.local/share/opencode/opencode.db`) or `OPENCODE_API_KEY` |
 
 ## Pitfalls
 

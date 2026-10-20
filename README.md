@@ -1,6 +1,6 @@
 # quota-cli
 
-一个命令行工具，汇总各家 AI 订阅的用量和剩余额度：**Claude**、**ChatGPT（Codex）**、**Command Code**、**Ollama Cloud**。
+一个命令行工具，汇总各家 AI 订阅的用量和剩余额度：**Claude**、**ChatGPT（Codex）**、**Command Code**、**Ollama Cloud**、**OpenCode Go**。
 
 - 单个可执行文件，支持 Ubuntu / Windows（也能编译 macOS）。
 - `--json` 输出固定结构的 JSON，方便 agent 和脚本读取。
@@ -50,6 +50,7 @@ curl -fsSL https://raw.githubusercontent.com/wuhanhao456/quota-cli/main/skills/q
 | ChatGPT | Codex CLI 登录文件 `~/.codex/auth.json`（或 `$CODEX_HOME`） | `GET chatgpt.com/backend-api/wham/usage` | Codex 的 5 小时和每周额度、套餐、额外 credits |
 | Command Code | `cmd login` 保存的 `~/.commandcode/auth.json`，或 `COMMANDCODE_API_KEY` | `GET api.commandcode.ai/alpha/billing/credits`、`/subscriptions` | 5 小时、每周、月度美元额度，剩余额度，购买的 credits，套餐 |
 | Ollama Cloud | 环境变量 `OLLAMA_API_KEY`（在 https://ollama.com/settings/keys 生成）；旧版套餐另需浏览器 cookie：`OLLAMA_COOKIE` 或文件 `~/.config/quota-cli/ollama-cookie` | `GET ollama.com/api/balance`；有 cookie 时读 `ollama.com/settings` 页面 | 新套餐：当月包含额度的已用 / 剩余，购买的余额，重置时间。旧套餐：会话（或每小时）和每周用量百分比及重置时间 |
+| OpenCode Go | opencode 的登录（`opencode auth login` 选 OpenCode Go，存在 `~/.local/share/opencode/opencode.db`，旧版是同目录的 `auth.json`），或环境变量 `OPENCODE_API_KEY` | `GET opencode.ai/zen/go/v1/usage` | 5 小时、每周、每月额度的用量百分比和重置时间 |
 
 说明：
 
@@ -67,7 +68,7 @@ curl -fsSL https://raw.githubusercontent.com/wuhanhao456/quota-cli/main/skills/q
   "generated_at": "2026-10-20T07:45:00Z",
   "providers": [
     {
-      "provider": "claude",            // claude | chatgpt | commandcode | ollama
+      "provider": "claude",            // claude | chatgpt | commandcode | ollama | opencode
       "name": "Claude",
       "status": "ok",                  // ok | unconfigured | error
       "plan": "Max",

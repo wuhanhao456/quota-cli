@@ -91,6 +91,23 @@ The cookie is only sent to ollama.com and never printed. It expires when you sig
 a while; on `session cookie expired`, copy a fresh one. Keep `OLLAMA_API_KEY` too if you have
 purchased credits: with both set, meters come from the page and the credit balance from the API.
 
+## OpenCode Go
+
+Either log in with opencode on the Hermes machine:
+
+```bash
+npm install -g opencode-ai
+opencode auth login        # choose "OpenCode Go" and paste the key from https://opencode.ai/auth
+```
+
+`quota` reads the key from opencode's data dir (`~/.local/share/opencode/opencode.db`, or
+`auth.json` there on older opencode; `$XDG_DATA_HOME/opencode` if set, and `OPENCODE_DB`
+is honored). A Go key is preferred over a Zen key when both exist.
+
+Or put the key in `~/.hermes/.env` as `OPENCODE_API_KEY=...`. The usage shows 5-hour, weekly
+and monthly percentages; OpenCode Go does not report dollar amounts. Zen pay-as-you-go balance
+is not covered.
+
 ## Troubleshooting
 
 | Error text | Fix |
@@ -102,4 +119,6 @@ purchased credits: with both set, meters come from the page and the credit balan
 | `set OLLAMA_API_KEY` | Add the key to `~/.hermes/.env`. |
 | `Ollama session cookie expired` | Copy a fresh `Cookie` header from ollama.com/settings (see above). |
 | `no usage meters found on the Ollama settings page` | Ollama changed the page; update `quota`. |
+| `no OpenCode Go key found` | `opencode auth login` (OpenCode Go) or set `OPENCODE_API_KEY`. |
+| `no OpenCode Go usage in the response` | The key's workspace has no Go subscription; use a key from the subscribed workspace. |
 | `unexpected response` | The service changed its API; update `quota`. |

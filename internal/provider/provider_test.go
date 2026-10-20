@@ -17,7 +17,7 @@ func fakeHome(t *testing.T, files map[string]string) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	for _, env := range []string{"CLAUDE_CONFIG_DIR", "CLAUDE_OAUTH_TOKEN", "CODEX_HOME", "COMMANDCODE_API_KEY", "COMMAND_CODE_API_KEY", "CMD_API_KEY", "OLLAMA_API_KEY", "OLLAMA_COOKIE"} {
+	for _, env := range []string{"CLAUDE_CONFIG_DIR", "CLAUDE_OAUTH_TOKEN", "CODEX_HOME", "COMMANDCODE_API_KEY", "COMMAND_CODE_API_KEY", "CMD_API_KEY", "OLLAMA_API_KEY", "OLLAMA_COOKIE", "OPENCODE_API_KEY", "OPENCODE_GO_API_KEY", "OPENCODE_DB", "XDG_DATA_HOME"} {
 		t.Setenv(env, "")
 	}
 	for rel, body := range files {
