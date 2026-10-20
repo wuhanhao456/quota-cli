@@ -60,14 +60,13 @@ curl -fsSL https://raw.githubusercontent.com/wuhanhao456/quota-cli/main/skills/q
 | Claude | Claude Code 登录文件 `~/.claude/.credentials.json`（或 `$CLAUDE_CONFIG_DIR`），也可设 `CLAUDE_OAUTH_TOKEN` | `GET api.anthropic.com/api/oauth/usage` | 5 小时会话、每周（全部 / Opus / Sonnet）用量百分比和重置时间；开启了额外用量时显示月度美元额度 |
 | ChatGPT | Codex CLI 登录文件 `~/.codex/auth.json`（或 `$CODEX_HOME`） | `GET chatgpt.com/backend-api/wham/usage` | Codex 的 5 小时和每周额度、套餐、额外 credits |
 | Command Code | `cmd login` 保存的 `~/.commandcode/auth.json`，或 `COMMANDCODE_API_KEY` | `GET api.commandcode.ai/alpha/billing/credits`、`/subscriptions` | 5 小时、每周、月度美元额度，剩余额度，购买的 credits，套餐 |
-| Ollama Cloud | 环境变量 `OLLAMA_API_KEY`（在 https://ollama.com/settings/keys 生成）；旧版套餐另需浏览器 cookie：`OLLAMA_COOKIE` 或文件 `~/.config/quota-cli/ollama-cookie` | `GET ollama.com/api/balance`；有 cookie 时读 `ollama.com/settings` 页面 | 新套餐：当月包含额度的已用 / 剩余，购买的余额，重置时间。旧套餐：会话（或每小时）和每周用量百分比及重置时间 |
+| Ollama Cloud | 环境变量 `OLLAMA_API_KEY`（在 https://ollama.com/settings/keys 生成） | `GET ollama.com/api/balance` | 旧版 Pro/Max 套餐：会话和每周用量百分比及重置时间。新套餐：当月包含额度的已用 / 剩余，重置时间。购买的余额 |
 | OpenCode Go | opencode 的登录（`opencode auth login` 选 OpenCode Go，存在 `~/.local/share/opencode/opencode.db`，旧版是同目录的 `auth.json`），或环境变量 `OPENCODE_API_KEY` | `GET opencode.ai/zen/go/v1/usage` | 5 小时、每周、每月额度的用量百分比和重置时间 |
 
 说明：
 
 - 这些接口大多没有公开文档（取数方式参考了 [CodexBar](https://github.com/steipete/CodexBar)），服务方改接口后可能需要更新。
 - ChatGPT 网页版的聊天次数限制没有接口可查，这里显示的是 Codex 额度。
-- Ollama 旧版套餐按会话 / 每周百分比计量，API key 拿不到，只能用登录 cookie 读设置页（取法见 [setup.md](skills/quota-usage/references/setup.md#ollama-cloud)）。cookie 只在本机读取，不会写进仓库或输出。两者都配时，百分比来自页面，购买余额来自 API。
 - macOS 上 Claude Code 把 token 存在钥匙串里，需要自己设置 `CLAUDE_OAUTH_TOKEN`。
 - token 过期时工具会提示你运行一次对应的 CLI（`claude` / `codex`）来刷新，不会自己刷新，避免把那些工具的登录弄失效。
 
