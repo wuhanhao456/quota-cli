@@ -24,7 +24,7 @@ func loadSample(t *testing.T) Output {
 
 func TestPNG(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "q.png")
-	if err := PNG(path, loadSample(t)); err != nil {
+	if err := PNG(path, loadSample(t), DefaultPersona); err != nil {
 		t.Fatal(err)
 	}
 	f, err := os.Open(path)
@@ -38,6 +38,20 @@ func TestPNG(t *testing.T) {
 	}
 	if img.Bounds().Dx() != int(imgWidth*scale) {
 		t.Fatalf("width = %d", img.Bounds().Dx())
+	}
+}
+
+func TestPNGWithoutAvatar(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "q.png")
+	if err := PNG(path, loadSample(t), Persona{Avatar: "none", Name: "WU"}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPNGMissingAvatar(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "q.png")
+	if err := PNG(path, loadSample(t), Persona{Avatar: filepath.Join(t.TempDir(), "nope.png")}); err == nil {
+		t.Fatal("expected an error for a missing avatar file")
 	}
 }
 
