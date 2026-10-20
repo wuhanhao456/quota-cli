@@ -30,6 +30,18 @@ quota --from-json saved.json --png quota.png   # 用保存的 JSON 重新出图
 
 退出码：只要有一家取数成功就是 0；所有已配置的服务都失败时是 1；参数错误是 2。
 
+## 给 Hermes Agent 用
+
+仓库里带了一个 [Hermes](https://github.com/NousResearch/hermes-agent) skill：[skills/quota-usage](skills/quota-usage/SKILL.md)。装好之后，问 Hermes「Claude 额度还剩多少」「发我一张用量图」，它会自动调用 `quota --json`，需要时用 `--png` 出图并直接发到聊天里。
+
+```bash
+# 在运行 Hermes 的机器上
+hermes skills install wuhanhao456/quota-cli/skills/quota-usage
+curl -fsSL https://raw.githubusercontent.com/wuhanhao456/quota-cli/main/skills/quota-usage/scripts/install.sh | bash   # 安装 quota 到 ~/.local/bin
+```
+
+各服务的登录方法见 [skills/quota-usage/references/setup.md](skills/quota-usage/references/setup.md)。注意凭据要在 Hermes 所在的机器上，以运行 Hermes 的那个用户身份登录。
+
 ## 各服务的数据来源
 
 | 服务 | 凭据来源 | 接口 | 能拿到的数据 |
