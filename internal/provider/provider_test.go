@@ -118,8 +118,8 @@ func TestCodex(t *testing.T) {
 func TestCommandCode(t *testing.T) {
 	fakeHome(t, map[string]string{".commandcode/auth.json": `{"apiKey":"user_abc"}`})
 	srv, auth := serve(t, map[string]string{
-		"/alpha/billing/credits": `{"credits":{"monthlyCredits":49,"monthlyCreditsGranted":70,"purchasedCredits":5},
-			"windowLimits":{"fiveHour":{"cap":14,"used":7,"resetAt":"2026-10-20T12:00:00Z"},"weekly":{"cap":35,"used":3.5}}}`,
+		"/alpha/billing/credits": `{"credits":{"monthlyCredits":49,"monthlyCreditsGranted":70,"purchasedCredits":5,"freeCredits":2},
+			"windowLimits":{"fiveHour":{"cap":14,"used":7,"resetAt":1792500000000},"weekly":{"cap":35,"used":3.5,"resetAt":0}}}`,
 		"/alpha/billing/subscriptions": `{"success":true,"data":{"planId":"individual-goat","status":"active","currentPeriodEnd":"2026-11-01T00:00:00Z"}}`,
 	})
 	commandCodeBaseURL = srv.URL + "/alpha"
@@ -128,10 +128,51 @@ func TestCommandCode(t *testing.T) {
 	if r.Status != "ok" || *auth != "Bearer user_abc" || r.Plan != "GOAT" {
 		t.Fatalf("got %+v", r)
 	}
-	if w := window(t, r, "session"); w.UsedPercent != 50 {
+	if w := window(t, r, "session"); w.UsedPercent != 50 || w.ResetsAt == nil {
 		t.Fatalf("session = %+v", w)
 	}
+	if w := window(t, r, "weekly"); w.ResetsAt != nil {
+		t.Fatalf("weekly reset 0 should be absent: %+v", w)
+	}
 	if w := window(t, r, "monthly"); *w.Used != 21 || *w.Remaining != 49 || w.ResetsAt == nil {
+		t.Fatalf("monthly = %+v", w)
+	}
+	if len(r.Details) != 2 || r.Details[1].Label != "Free credits" {
+		t.Fatalf("details = %+v", r.Details)
+	}
+}
+
+// The CLI's credits response omits the grant; the plan sizes the month, and org keys are scoped.
+func TestCommandCodeOrgAndPlanGrant(t *testing.T) {
+	fakeHome(t, nil)
+	t.Setenv("COMMANDCODE_API_KEY", "user_env")
+	queries := map[string]string{}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		queries[r.URL.Path] = r.URL.RawQuery
+		switch r.URL.Path {
+		case "/alpha/whoami":
+			w.Write([]byte(`{"success":true,"user":{"email":"me@x.y"},"org":{"id":"org_7","login":"acme"}}`))
+		case "/alpha/billing/credits":
+			w.Write([]byte(`{"credits":{"monthlyCredits":10}}`))
+		case "/alpha/billing/subscriptions":
+			w.Write([]byte(`{"success":true,"data":{"planId":"teams-pro-monthly"}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+	commandCodeBaseURL = srv.URL + "/alpha"
+
+	r := Run(context.Background(), srv.Client(), All()[2])
+	if r.Status != "ok" || r.Plan != "Teams Pro" || r.Account != "acme" {
+		t.Fatalf("got %+v", r)
+	}
+	for _, p := range []string{"/alpha/billing/credits", "/alpha/billing/subscriptions"} {
+		if queries[p] != "orgId=org_7" {
+			t.Errorf("%s query = %q", p, queries[p])
+		}
+	}
+	if w := window(t, r, "monthly"); *w.Limit != 40 || *w.Used != 30 || w.UsedPercent != 75 {
 		t.Fatalf("monthly = %+v", w)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -46,8 +47,34 @@ func fetchCommandCode(ctx context.Context, c *http.Client) (*Report, error) {
 	}
 	headers := map[string]string{"Authorization": "Bearer " + key}
 
+	// Like the cmd CLI, scope billing to the active organization when the key belongs to one.
+	// whoami is best-effort: without it the calls fall back to the personal namespace.
+	scope := ""
+	var who struct {
+		User struct {
+			Email    string `json:"email"`
+			UserName string `json:"userName"`
+		} `json:"user"`
+		Org *struct {
+			ID    string `json:"id"`
+			Login string `json:"login"`
+		} `json:"org"`
+	}
+	if err := getJSON(ctx, c, commandCodeBaseURL+"/whoami", headers, &who); err == nil {
+		r.Account = who.User.Email
+		if r.Account == "" {
+			r.Account = who.User.UserName
+		}
+		if who.Org != nil && who.Org.ID != "" {
+			scope = "?orgId=" + url.QueryEscape(who.Org.ID)
+			if who.Org.Login != "" {
+				r.Account = who.Org.Login
+			}
+		}
+	}
+
 	var root map[string]any
-	if err := getJSON(ctx, c, commandCodeBaseURL+"/billing/credits", headers, &root); err != nil {
+	if err := getJSON(ctx, c, commandCodeBaseURL+"/billing/credits"+scope, headers, &root); err != nil {
 		return r, err
 	}
 	credits, _ := root["credits"].(map[string]any)
@@ -84,17 +111,23 @@ func fetchCommandCode(ctx context.Context, c *http.Client) (*Report, error) {
 		Data    map[string]any `json:"data"`
 	}
 	var periodEnd any
-	if err := getJSON(ctx, c, commandCodeBaseURL+"/billing/subscriptions", headers, &sub); err == nil && sub.Success {
+	planID := ""
+	if err := getJSON(ctx, c, commandCodeBaseURL+"/billing/subscriptions"+scope, headers, &sub); err == nil && sub.Success {
 		if sub.Data == nil {
 			r.Plan = "Free"
 		} else {
 			if id, _ := sub.Data["planId"].(string); id != "" {
+				planID = id
 				r.Plan = commandCodePlanName(id)
 			}
 			periodEnd = sub.Data["currentPeriodEnd"]
 		}
 	}
 
+	// The CLI's credits response usually omits the grant, so size the month from the plan.
+	if !hasGranted && planID != "" {
+		granted, hasGranted = commandCodePlanCredits(planID)
+	}
 	if hasRemaining && hasGranted && granted > 0 {
 		used := max(0, granted-remaining)
 		r.Windows = append(r.Windows, Window{
@@ -107,16 +140,53 @@ func fetchCommandCode(ctx context.Context, c *http.Client) (*Report, error) {
 	if p, ok := num(credits["purchasedCredits"]); ok && p > 0 {
 		r.Details = append(r.Details, Detail{Label: "Purchased credits", Value: usd(p)})
 	}
+	if f, ok := num(credits["freeCredits"]); ok && f > 0 {
+		r.Details = append(r.Details, Detail{Label: "Free credits", Value: usd(f)})
+	}
 	return r, nil
 }
 
-func commandCodePlanName(id string) string {
-	known := map[string]string{
-		"individual-go": "Go", "individual-goat": "GOAT", "individual-pro": "Pro",
-		"individual-max": "Max", "team-pro": "Team Pro", "provider": "Provider",
+type commandCodePlan struct {
+	name    string
+	credits float64
+}
+
+// Monthly USD allowance per plan, as used by the cmd CLI and CodexBar.
+var commandCodePlans = map[string]commandCodePlan{
+	"individual-go":       {"Go", 10},
+	"individual-goat":     {"GOAT", 70},
+	"individual-pro":      {"Pro", 30},
+	"individual-pro-v1":   {"Pro", 80},
+	"individual-provider": {"Provider", 15},
+	"individual-max":      {"Max", 150},
+	"individual-ultra":    {"Ultra", 300},
+	"teams-pro":           {"Teams Pro", 40},
+}
+
+// lookupCommandCodePlan matches a plan id exactly, then by the longest known prefix
+// (billing ids can carry suffixes such as an interval).
+func lookupCommandCodePlan(id string) (commandCodePlan, bool) {
+	id = strings.ToLower(id)
+	if p, ok := commandCodePlans[id]; ok {
+		return p, true
 	}
-	if n, ok := known[strings.ToLower(id)]; ok {
-		return n
+	best, found := "", false
+	for k := range commandCodePlans {
+		if strings.HasPrefix(id, k+"-") && len(k) > len(best) {
+			best, found = k, true
+		}
+	}
+	return commandCodePlans[best], found
+}
+
+func commandCodePlanCredits(id string) (float64, bool) {
+	p, ok := lookupCommandCodePlan(id)
+	return p.credits, ok
+}
+
+func commandCodePlanName(id string) string {
+	if p, ok := lookupCommandCodePlan(id); ok {
+		return p.name
 	}
 	return id
 }
