@@ -63,10 +63,16 @@ Exit code is 0 if any provider succeeded, 1 if every configured provider failed,
 
 ## Setup
 
-Install or update the binary (Linux/macOS, puts `quota` in `~/.local/bin`):
+Install or update the binary. Linux/macOS (or Git Bash on Windows), into `~/.local/bin`:
 
 ```bash
-bash scripts/install.sh
+bash "${HERMES_SKILL_DIR}/scripts/install.sh"
+```
+
+Native Windows (PowerShell), into `%LOCALAPPDATA%\Programs\quota`:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "${HERMES_SKILL_DIR}/scripts/install.ps1"
 ```
 
 Then make sure each service is logged in **on the machine where Hermes runs** (for a gateway
@@ -89,7 +95,7 @@ on a server, that is the server). Per-service steps are in [references/setup.md]
   `codex exec "hi"`), then retry.
 - **ChatGPT web limits are not available**; the ChatGPT entry shows Codex limits for the plan.
 - The endpoints are undocumented and can change. If a provider starts returning parse errors,
-  update the binary (`bash scripts/install.sh`) and report the issue at
+  update the binary (re-run the installer above) and report the issue at
   https://github.com/wuhanhao456/quota-cli/issues.
 - The JSON may contain an account email (Codex, Command Code). Do not post it to group chats
   unless the user asked.

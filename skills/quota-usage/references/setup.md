@@ -5,10 +5,21 @@ tool's own files; `quota` only reads them.
 
 ## Binary
 
+Linux / macOS / Git Bash, into `~/.local/bin`:
+
 ```bash
-bash scripts/install.sh            # latest release into ~/.local/bin
-QUOTA_VERSION=v0.1.0 bash scripts/install.sh   # a specific release
+curl -fsSL https://raw.githubusercontent.com/wuhanhao456/quota-cli/main/skills/quota-usage/scripts/install.sh | bash
+# a specific release:
+curl -fsSL https://raw.githubusercontent.com/wuhanhao456/quota-cli/main/skills/quota-usage/scripts/install.sh | QUOTA_VERSION=v0.1.0 bash
 ```
+
+Windows PowerShell, into `%LOCALAPPDATA%\Programs\quota` (added to the user PATH):
+
+```powershell
+irm https://raw.githubusercontent.com/wuhanhao456/quota-cli/main/skills/quota-usage/scripts/install.ps1 | iex
+```
+
+The same scripts ship inside the skill under `scripts/`.
 
 Without a release (or on an unsupported platform), build from source with Go 1.24+:
 
