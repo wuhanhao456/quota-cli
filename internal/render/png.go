@@ -1,13 +1,21 @@
 package render
 
 import (
+	"bytes"
+	_ "embed"
 	"fmt"
+	"image"
 	"image/color"
+	_ "image/jpeg"
+	"image/png"
+	"math"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/fogleman/gg"
 	"github.com/golang/freetype/truetype"
+	xdraw "golang.org/x/image/draw"
 	"golang.org/x/image/font"
 	"golang.org/x/image/font/gofont/gobold"
 	"golang.org/x/image/font/gofont/gomedium"
@@ -16,46 +24,77 @@ import (
 	"github.com/wuhanhao456/quota-cli/internal/provider"
 )
 
+var (
+	//go:embed assets/wu.png
+	defaultAvatar []byte
+	//go:embed assets/Cinzel-Bold.ttf
+	cinzelBold []byte
+	//go:embed assets/Cinzel-Medium.ttf
+	cinzelMedium []byte
+	//go:embed assets/CormorantGaramond-MediumItalic.ttf
+	cormorantItalic []byte
+)
+
+// Persona decorates the image with a character portrait, a name and a motto.
+type Persona struct {
+	Avatar  string // image file (PNG/JPEG); "" uses the built-in portrait, "none" hides the portrait panel
+	Name    string
+	Tagline string
+}
+
+// DefaultPersona is the built-in character, Wu.
+var DefaultPersona = Persona{Name: "WU", Tagline: "A calmer mind, a wider world."}
+
 // The image is laid out in logical pixels and drawn at scale for sharp text on HiDPI screens.
 const (
 	scale      = 2.0
-	imgWidth   = 920.0
-	margin     = 36.0
-	cardPad    = 24.0
-	cardGap    = 18.0
-	headerH    = 92.0
-	cardHeadH  = 66.0
-	windowRowH = 66.0
+	imgWidth   = 1000.0
+	margin     = 40.0
+	panelW     = 290.0
+	panelGap   = 28.0
+	minPanelH  = 760.0
+	cardPad    = 22.0
+	cardGap    = 16.0
+	headerH    = 96.0
+	cardHeadH  = 60.0
+	windowRowH = 64.0
 	detailRowH = 30.0
 	messageH   = 40.0
-	footerH    = 44.0
+	footerH    = 46.0
 )
 
+// Colors are taken from the character sheet: porcelain white, sky, cobalt, royal and navy,
+// with the antique gold of her horns as the highlight.
 type palette struct {
-	bg, card, border, text, muted, track color.Color
-	ok, warn, bad                        color.Color
+	bg, card, border, hairline, text, muted, track color.Color
+	sky, cobalt, royal, navy, gold, rose           color.Color
 }
 
 var theme = palette{
-	bg:     hex("#0D1117"),
-	card:   hex("#161B22"),
-	border: hex("#262C36"),
-	text:   hex("#E6EDF3"),
-	muted:  hex("#8B949E"),
-	track:  hex("#262C36"),
-	ok:     hex("#3FB950"),
-	warn:   hex("#D29922"),
-	bad:    hex("#F85149"),
+	bg:       hex("#F6F9FE"),
+	card:     hex("#FFFFFF"),
+	border:   hex("#D3E0FA"),
+	hairline: hex("#8FB0F5"),
+	text:     hex("#1E2550"),
+	muted:    hex("#6E7BA3"),
+	track:    hex("#E7EEFC"),
+	sky:      hex("#BED0F8"),
+	cobalt:   hex("#4E89FB"),
+	royal:    hex("#244092"),
+	navy:     hex("#212952"),
+	gold:     hex("#B8925A"),
+	rose:     hex("#D45B7A"),
 }
 
 var accents = map[string]color.Color{
 	"claude":      hex("#D97757"),
 	"chatgpt":     hex("#10A37F"),
 	"commandcode": hex("#8B7CF6"),
-	"ollama":      hex("#C9D1D9"),
+	"ollama":      hex("#5B6478"),
+	"opencode":    hex("#3D4451"),
 }
 
-type fonts struct{ title, name, label, value, small, badge font.Face }
+type fonts struct{ display, title, name, label, value, small, badge, motto, caps font.Face }
 
 func loadFonts() fonts {
 	face := func(ttf []byte, size float64) font.Face {
@@ -63,15 +102,22 @@ func loadFonts() fonts {
 		if err != nil {
 			panic(err) // embedded fonts are known-good
 		}
-		return truetype.NewFace(f, &truetype.Options{Size: size * scale, DPI: 72, Hinting: font.HintingFull})
+		ff := truetype.NewFace(f, &truetype.Options{Size: size * scale, DPI: 72, Hinting: font.HintingFull})
+		// A fresh face reports a zero advance for the first glyph it measures; warm it up
+		// so letter-spaced text measures correctly from the first rune.
+		font.MeasureString(ff, "M")
+		return ff
 	}
 	return fonts{
-		title: face(gobold.TTF, 26),
-		name:  face(gobold.TTF, 19),
-		label: face(gomedium.TTF, 14.5),
-		value: face(gobold.TTF, 14.5),
-		small: face(goregular.TTF, 12.5),
-		badge: face(gomedium.TTF, 11.5),
+		display: face(cinzelBold, 54),
+		title:   face(cinzelBold, 23),
+		name:    face(cinzelBold, 17),
+		label:   face(gomedium.TTF, 14),
+		value:   face(gobold.TTF, 14),
+		small:   face(goregular.TTF, 12),
+		badge:   face(gomedium.TTF, 11),
+		motto:   face(cormorantItalic, 19),
+		caps:    face(cinzelMedium, 10.5),
 	}
 }
 
@@ -88,76 +134,224 @@ func cardHeight(r provider.Report) float64 {
 }
 
 // PNG renders the report as a dashboard-style image and saves it to path.
-func PNG(path string, out Output) error {
-	total := margin + headerH
-	for _, r := range out.Providers {
-		total += cardHeight(r) + cardGap
+func PNG(path string, out Output, p Persona) error {
+	avatar, err := loadAvatar(p.Avatar)
+	if err != nil {
+		return err
 	}
-	total += footerH
+	withPanel := avatar != nil
+
+	colX := margin
+	if withPanel {
+		colX += panelW + panelGap
+	}
+	colW := imgWidth - margin - colX
+
+	content := headerH
+	for _, r := range out.Providers {
+		content += cardHeight(r) + cardGap
+	}
+	content -= cardGap
+	if withPanel {
+		content = max(content, minPanelH)
+	}
+	total := margin + content + footerH + margin/2
 
 	dc := gg.NewContext(int(imgWidth*scale), int(total*scale))
 	f := loadFonts()
 	now := time.Now()
 
-	dc.SetColor(theme.bg)
-	dc.Clear()
+	drawBackdrop(dc, total)
+	if withPanel {
+		drawPersona(dc, f, p, avatar, margin, margin, panelW, content)
+	}
 
-	// Header: title, generation time, and an overall summary.
+	// Header: title, generation time and an overall summary.
 	dc.SetFontFace(f.title)
-	dc.SetColor(theme.text)
-	dc.DrawString("Subscription Quotas", margin*scale, (margin+26)*scale)
+	dc.SetColor(theme.navy)
+	title := "Subscription Quotas"
+	if !withPanel && p.Name != "" {
+		title = p.Name + " · " + title
+	}
+	drawSpaced(dc, strings.ToUpper(title), colX, margin+30, 1.6, 0)
 	dc.SetFontFace(f.small)
 	dc.SetColor(theme.muted)
-	dc.DrawString(summary(out)+"  ·  "+stamp(out, now).Format("2006-01-02 15:04 MST"), margin*scale, (margin+52)*scale)
+	dc.DrawString(summary(out)+"  ·  "+stamp(out, now).Format("2006-01-02 15:04 MST"), colX*scale, (margin+56)*scale)
+	drawRule(dc, colX, margin+74, colW)
 
 	y := margin + headerH
 	for _, r := range out.Providers {
 		h := cardHeight(r)
-		drawCard(dc, f, r, y, h, now)
+		drawCard(dc, f, r, colX, y, colW, h, now)
 		y += h + cardGap
 	}
 
-	dc.SetFontFace(f.small)
+	fy := margin + content + footerH/2 + 4
+	dc.SetFontFace(f.caps)
 	dc.SetColor(theme.muted)
-	dc.DrawStringAnchored("generated by quota-cli", (imgWidth-margin)*scale, (y+12)*scale, 1, 0.5)
+	drawSpaced(dc, "GENERATED BY QUOTA-CLI", imgWidth-margin, fy, 1.4, 1)
+	if !withPanel && p.Tagline != "" {
+		dc.SetFontFace(f.motto)
+		dc.SetColor(theme.royal)
+		dc.DrawStringAnchored(p.Tagline, colX*scale, fy*scale, 0, 0.35)
+	}
 	return dc.SavePNG(path)
 }
 
-func drawCard(dc *gg.Context, f fonts, r provider.Report, y, h float64, now time.Time) {
-	x, w := margin, imgWidth-2*margin
-	accent := accents[r.Provider]
-	if accent == nil {
-		accent = theme.text
+// loadAvatar returns the portrait to draw, or nil when the panel is disabled.
+func loadAvatar(path string) (image.Image, error) {
+	switch strings.ToLower(path) {
+	case "none", "off":
+		return nil, nil
+	case "":
+		return png.Decode(bytes.NewReader(defaultAvatar))
 	}
+	fh, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("avatar: %w", err)
+	}
+	defer fh.Close()
+	img, _, err := image.Decode(fh)
+	if err != nil {
+		return nil, fmt.Errorf("avatar %s: %w", path, err)
+	}
+	return img, nil
+}
 
-	dc.SetColor(theme.card)
-	dc.DrawRoundedRectangle(x*scale, y*scale, w*scale, h*scale, 14*scale)
+// drawBackdrop paints the porcelain page with the sheet's thin cobalt frame and corner stars.
+func drawBackdrop(dc *gg.Context, total float64) {
+	g := gg.NewLinearGradient(0, 0, 0, total*scale)
+	g.AddColorStop(0, hex("#FBFCFF"))
+	g.AddColorStop(1, hex("#EEF3FD"))
+	dc.SetFillStyle(g)
+	dc.DrawRectangle(0, 0, imgWidth*scale, total*scale)
+	dc.Fill()
+
+	for _, in := range []float64{14, 18} {
+		dc.SetColor(withAlpha(theme.cobalt, 0.55))
+		if in == 18 {
+			dc.SetColor(withAlpha(theme.cobalt, 0.25))
+		}
+		dc.SetLineWidth(0.8 * scale)
+		dc.DrawRectangle(in*scale, in*scale, (imgWidth-2*in)*scale, (total-2*in)*scale)
+		dc.Stroke()
+	}
+	for _, c := range [][2]float64{{16, 16}, {imgWidth - 16, 16}, {16, total - 16}, {imgWidth - 16, total - 16}} {
+		dc.SetColor(theme.bg)
+		dc.DrawCircle(c[0]*scale, c[1]*scale, 6*scale)
+		dc.Fill()
+		dc.SetColor(theme.cobalt)
+		star(dc, c[0], c[1], 7)
+	}
+}
+
+func drawPersona(dc *gg.Context, f fonts, p Persona, avatar image.Image, x, y, w, h float64) {
+	g := gg.NewLinearGradient(0, y*scale, 0, (y+h)*scale)
+	g.AddColorStop(0, hex("#FFFFFF"))
+	g.AddColorStop(0.55, hex("#F1F5FE"))
+	g.AddColorStop(1, hex("#DCE6FC"))
+	dc.SetFillStyle(g)
+	dc.DrawRoundedRectangle(x*scale, y*scale, w*scale, h*scale, 16*scale)
 	dc.Fill()
 	dc.SetColor(theme.border)
 	dc.SetLineWidth(1 * scale)
-	dc.DrawRoundedRectangle(x*scale, y*scale, w*scale, h*scale, 14*scale)
+	dc.DrawRoundedRectangle(x*scale, y*scale, w*scale, h*scale, 16*scale)
 	dc.Stroke()
-	// Accent strip on the left edge.
-	dc.SetColor(accent)
-	dc.DrawRoundedRectangle(x*scale, (y+16)*scale, 4*scale, (h-32)*scale, 2*scale)
+
+	cx := x + w/2
+	top := y + 26
+	if p.Name != "" {
+		dc.SetFontFace(f.display)
+		dc.SetColor(theme.royal)
+		drawSpaced(dc, strings.ToUpper(p.Name), cx, top+44, 4, 0.5)
+		top += 62
+	}
+	// Ornamental divider: hairline, diamond, hairline.
+	dc.SetColor(theme.royal)
+	dc.SetLineWidth(0.8 * scale)
+	dc.DrawLine((cx-62)*scale, top*scale, (cx-8)*scale, top*scale)
+	dc.DrawLine((cx+8)*scale, top*scale, (cx+62)*scale, top*scale)
+	dc.Stroke()
+	diamond(dc, cx, top, 4.5, false)
+	diamond(dc, cx, top, 1.8, true)
+	dc.SetFontFace(f.caps)
+	dc.SetColor(theme.cobalt)
+	drawSpaced(dc, "QUOTA LEDGER", cx, top+20, 2.4, 0.5)
+	top += 34
+
+	// Fit the portrait (and the motto under it) into the remaining space, centred vertically.
+	mottoH := 0.0
+	if p.Tagline != "" {
+		mottoH = 40
+	}
+	boxW, boxH := w-12, y+h-22-top-mottoH
+	b := avatar.Bounds()
+	k := math.Min(boxW/float64(b.Dx()), boxH/float64(b.Dy()))
+	aw, ah := float64(b.Dx())*k, float64(b.Dy())*k
+	ax, ay := cx-aw/2, top+(boxH-ah)/2
+	bottom := ay + ah
+	if p.Tagline != "" {
+		dc.SetFontFace(f.motto)
+		dc.SetColor(theme.royal)
+		dc.DrawStringAnchored(truncate(dc, p.Tagline, (w-24)*scale), cx*scale, (bottom+30)*scale, 0.5, 0)
+	}
+
+	// Soft halo and a few sparkles behind her.
+	halo := gg.NewRadialGradient(cx*scale, (ay+ah*0.28)*scale, 0, cx*scale, (ay+ah*0.28)*scale, w*0.55*scale)
+	halo.AddColorStop(0, withAlpha(theme.sky, 0.55))
+	halo.AddColorStop(1, withAlpha(theme.sky, 0))
+	dc.SetFillStyle(halo)
+	dc.DrawCircle(cx*scale, (ay+ah*0.28)*scale, w*0.55*scale)
 	dc.Fill()
+	dc.SetColor(withAlpha(theme.cobalt, 0.7))
+	for _, s := range [][3]float64{{-0.40, 0.08, 6}, {0.42, 0.18, 4.5}, {-0.36, 0.52, 3.5}, {0.38, 0.62, 5}} {
+		star(dc, cx+s[0]*w, ay+s[1]*ah, s[2])
+	}
+	dc.SetColor(withAlpha(theme.royal, 0.10))
+	dc.DrawEllipse(cx*scale, (bottom-2)*scale, aw*0.38*scale, 5*scale)
+	dc.Fill()
+
+	dst := image.NewRGBA(image.Rect(0, 0, int(aw*scale), int(ah*scale)))
+	xdraw.CatmullRom.Scale(dst, dst.Bounds(), avatar, b, xdraw.Over, nil)
+	dc.DrawImage(dst, int(ax*scale), int(ay*scale))
+}
+
+func drawCard(dc *gg.Context, f fonts, r provider.Report, x, y, w, h float64, now time.Time) {
+	accent := accents[r.Provider]
+	if accent == nil {
+		accent = theme.cobalt
+	}
+
+	dc.SetColor(withAlpha(theme.royal, 0.05))
+	dc.DrawRoundedRectangle(x*scale, (y+3)*scale, w*scale, h*scale, 12*scale)
+	dc.Fill()
+	dc.SetColor(theme.card)
+	dc.DrawRoundedRectangle(x*scale, y*scale, w*scale, h*scale, 12*scale)
+	dc.Fill()
+	dc.SetColor(theme.border)
+	dc.SetLineWidth(1 * scale)
+	dc.DrawRoundedRectangle(x*scale, y*scale, w*scale, h*scale, 12*scale)
+	dc.Stroke()
 
 	inner := x + cardPad
 	innerW := w - 2*cardPad
-	cy := y + cardPad + 14
+	cy := y + cardPad + 10
 
+	// Brand dot, then the provider name in the sheet's serif capitals.
+	dc.SetColor(accent)
+	dc.DrawCircle((inner+4)*scale, cy*scale, 4*scale)
+	dc.Fill()
 	dc.SetFontFace(f.name)
-	dc.SetColor(theme.text)
-	dc.DrawStringAnchored(r.Name, inner*scale, cy*scale, 0, 0.35)
-	nameW, _ := dc.MeasureString(r.Name)
-	bx := inner + nameW/scale + 12
+	dc.SetColor(theme.navy)
+	nameW := drawSpaced(dc, strings.ToUpper(r.Name), inner+16, cy+6, 0.6, 0)
+	bx := inner + 16 + nameW + 12
 	if r.Plan != "" {
-		bx = drawBadge(dc, f, r.Plan, bx, cy, accent, true) + 8
+		bx = drawBadge(dc, f, r.Plan, bx, cy, theme.royal, true) + 8
 	}
 	if r.Status != "ok" {
 		label, c := "NOT CONFIGURED", theme.muted
 		if r.Status == "error" {
-			label, c = "ERROR", theme.bad
+			label, c = "ERROR", theme.rose
 		}
 		drawBadge(dc, f, label, bx, cy, c, false)
 	}
@@ -171,47 +365,58 @@ func drawCard(dc *gg.Context, f fonts, r provider.Report, y, h float64, now time
 	if r.Status != "ok" {
 		dc.SetFontFace(f.small)
 		dc.SetColor(theme.muted)
-		dc.DrawString(truncate(dc, r.Error, innerW*scale), inner*scale, (ry+14)*scale)
+		dc.DrawString(truncate(dc, r.Error, innerW*scale), inner*scale, (ry+12)*scale)
 		return
 	}
 	if len(r.Windows) == 0 && len(r.Details) == 0 {
 		dc.SetFontFace(f.small)
 		dc.SetColor(theme.muted)
-		dc.DrawString("No usage data reported.", inner*scale, (ry+14)*scale)
+		dc.DrawString("No usage data reported.", inner*scale, (ry+12)*scale)
 		return
 	}
 	for _, win := range r.Windows {
 		drawWindow(dc, f, win, inner, ry, innerW, now)
 		ry += windowRowH
 	}
-	for _, d := range r.Details {
+	for i, d := range r.Details {
+		if i == 0 {
+			drawRule(dc, inner, ry-6, innerW)
+		}
 		dc.SetFontFace(f.label)
 		dc.SetColor(theme.muted)
-		dc.DrawString(d.Label, inner*scale, (ry+16)*scale)
+		dc.DrawString(d.Label, inner*scale, (ry+19)*scale)
 		dc.SetFontFace(f.value)
-		dc.SetColor(theme.text)
-		dc.DrawStringAnchored(d.Value, (inner+innerW)*scale, (ry+16)*scale, 1, 0)
+		dc.SetColor(theme.navy)
+		dc.DrawStringAnchored(d.Value, (inner+innerW)*scale, (ry+19)*scale, 1, 0)
 		ry += detailRowH
 	}
 }
 
 func drawWindow(dc *gg.Context, f fonts, win provider.Window, x, y, w float64, now time.Time) {
-	c := levelColor(win.UsedPercent)
+	from, to := levelColors(win.UsedPercent)
 
 	dc.SetFontFace(f.label)
 	dc.SetColor(theme.text)
 	dc.DrawString(win.Label, x*scale, (y+14)*scale)
 	dc.SetFontFace(f.value)
-	dc.SetColor(c)
+	dc.SetColor(to)
 	dc.DrawStringAnchored(fmt.Sprintf("%.0f%% used", win.UsedPercent), (x+w)*scale, (y+14)*scale, 1, 0)
 
-	by, bh := y+24, 9.0
+	by, bh := y+24, 8.0
 	dc.SetColor(theme.track)
 	dc.DrawRoundedRectangle(x*scale, by*scale, w*scale, bh*scale, bh/2*scale)
 	dc.Fill()
-	if fill := w * win.UsedPercent / 100; fill > 0 {
-		dc.SetColor(c)
-		dc.DrawRoundedRectangle(x*scale, by*scale, max(fill, bh)*scale, bh*scale, bh/2*scale)
+	if fill := w * math.Min(win.UsedPercent, 100) / 100; fill > 0 {
+		fill = max(fill, bh)
+		g := gg.NewLinearGradient(x*scale, 0, (x+fill)*scale, 0)
+		g.AddColorStop(0, from)
+		g.AddColorStop(1, to)
+		dc.SetFillStyle(g)
+		dc.DrawRoundedRectangle(x*scale, by*scale, fill*scale, bh*scale, bh/2*scale)
+		dc.Fill()
+		// A pearl at the tip of the bar.
+		dc.SetColor(theme.card)
+		dc.DrawCircle((x+fill-bh/2)*scale, (by+bh/2)*scale, 2.2*scale)
 		dc.Fill()
 	}
 
@@ -221,9 +426,9 @@ func drawWindow(dc *gg.Context, f fonts, win provider.Window, x, y, w float64, n
 	}
 	dc.SetFontFace(f.small)
 	dc.SetColor(theme.muted)
-	dc.DrawString(strings.Join(left, "  ·  "), x*scale, (y+50)*scale)
+	dc.DrawString(strings.Join(left, "  ·  "), x*scale, (y+49)*scale)
 	if rt := resetText(win.ResetsAt, now); rt != "" {
-		dc.DrawStringAnchored(rt, (x+w)*scale, (y+50)*scale, 1, 0)
+		dc.DrawStringAnchored(rt, (x+w)*scale, (y+49)*scale, 1, 0)
 	}
 }
 
@@ -232,12 +437,15 @@ func drawBadge(dc *gg.Context, f fonts, text string, x, cy float64, c color.Colo
 	dc.SetFontFace(f.badge)
 	tw, _ := dc.MeasureString(text)
 	w, h := tw/scale+16, 20.0
-	r, g, b, _ := c.RGBA()
-	dc.SetRGBA255(int(r>>8), int(g>>8), int(b>>8), 46)
+	if filled {
+		dc.SetColor(withAlpha(theme.sky, 0.45))
+	} else {
+		dc.SetColor(withAlpha(c, 0.08))
+	}
 	dc.DrawRoundedRectangle(x*scale, (cy-h/2)*scale, w*scale, h*scale, h/2*scale)
 	dc.Fill()
 	if !filled {
-		dc.SetColor(c)
+		dc.SetColor(withAlpha(c, 0.6))
 		dc.SetLineWidth(1 * scale)
 		dc.DrawRoundedRectangle(x*scale, (cy-h/2)*scale, w*scale, h*scale, h/2*scale)
 		dc.Stroke()
@@ -247,14 +455,75 @@ func drawBadge(dc *gg.Context, f fonts, text string, x, cy float64, c color.Colo
 	return x + w
 }
 
-func levelColor(pct float64) color.Color {
+// drawRule draws a hairline that fades out to the right, starting at a small star.
+func drawRule(dc *gg.Context, x, y, w float64) {
+	g := gg.NewLinearGradient(x*scale, 0, (x+w)*scale, 0)
+	g.AddColorStop(0, withAlpha(theme.hairline, 0.9))
+	g.AddColorStop(1, withAlpha(theme.hairline, 0))
+	dc.SetStrokeStyle(g)
+	dc.SetLineWidth(0.8 * scale)
+	dc.DrawLine((x+10)*scale, y*scale, (x+w)*scale, y*scale)
+	dc.Stroke()
+	dc.SetColor(theme.cobalt)
+	star(dc, x+3, y, 4)
+}
+
+// drawSpaced draws letter-spaced text with its baseline at y, anchored horizontally by ax
+// (0 left, 0.5 centre, 1 right), and returns its width in logical pixels.
+func drawSpaced(dc *gg.Context, s string, x, y, spacing, ax float64) float64 {
+	runes := []rune(s)
+	widths := make([]float64, len(runes))
+	total := 0.0
+	for i, r := range runes {
+		widths[i], _ = dc.MeasureString(string(r))
+		total += widths[i]
+	}
+	total += spacing * scale * float64(max(len(runes)-1, 0))
+	cx := x*scale - total*ax
+	for i, r := range runes {
+		dc.DrawString(string(r), cx, y*scale)
+		cx += widths[i] + spacing*scale
+	}
+	return total / scale
+}
+
+// star fills a four-pointed sparkle, the motif on the character sheet's frame.
+func star(dc *gg.Context, cx, cy, r float64) {
+	in := r * 0.22
+	for i := 0; i < 8; i++ {
+		a := float64(i) * math.Pi / 4
+		d := r
+		if i%2 == 1 {
+			d = in
+		}
+		dc.LineTo((cx+d*math.Sin(a))*scale, (cy-d*math.Cos(a))*scale)
+	}
+	dc.ClosePath()
+	dc.Fill()
+}
+
+func diamond(dc *gg.Context, cx, cy, r float64, filled bool) {
+	dc.MoveTo(cx*scale, (cy-r)*scale)
+	dc.LineTo((cx+r)*scale, cy*scale)
+	dc.LineTo(cx*scale, (cy+r)*scale)
+	dc.LineTo((cx-r)*scale, cy*scale)
+	dc.ClosePath()
+	if filled {
+		dc.Fill()
+	} else {
+		dc.Stroke()
+	}
+}
+
+// levelColors returns the bar gradient for a usage level: cobalt, then gold, then rose.
+func levelColors(pct float64) (from, to color.Color) {
 	switch {
 	case pct >= 90:
-		return theme.bad
+		return hex("#F2A7B9"), theme.rose
 	case pct >= 70:
-		return theme.warn
+		return hex("#E8CFA0"), theme.gold
 	default:
-		return theme.ok
+		return theme.sky, theme.cobalt
 	}
 }
 
@@ -298,6 +567,11 @@ func hex(s string) color.Color {
 	var r, g, b uint8
 	fmt.Sscanf(strings.TrimPrefix(s, "#"), "%02x%02x%02x", &r, &g, &b)
 	return color.RGBA{r, g, b, 255}
+}
+
+func withAlpha(c color.Color, a float64) color.Color {
+	r, g, b, _ := c.RGBA()
+	return color.NRGBA{uint8(r >> 8), uint8(g >> 8), uint8(b >> 8), uint8(a * 255)}
 }
 
 func stamp(out Output, now time.Time) time.Time {
