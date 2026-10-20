@@ -28,6 +28,17 @@ quota --providers claude,chatgpt
 quota --from-json saved.json --png quota.png   # 用保存的 JSON 重新出图
 ```
 
+### 图片风格
+
+图片按角色 Wu 的设定图配色（瓷白、天蓝、钴蓝、深蓝，点缀龙角的古金色），左侧是她的立绘，默认内嵌在程序里。可以换成别的角色或关掉：
+
+```bash
+quota --png quota.png --avatar ./me.png --persona-name "LUNA" --persona-tagline "Stay curious."
+quota --png quota.png --avatar none    # 不要立绘，只保留数据卡片
+```
+
+也可以用环境变量 `QUOTA_AVATAR`、`QUOTA_PERSONA_NAME`、`QUOTA_PERSONA_TAGLINE` 设默认值（方便 Hermes 这类 agent 调用时不用带参数）。立绘建议用透明背景的 PNG。图里的字体是 Cinzel 和 Cormorant Garamond（SIL OFL 1.1，见 `internal/render/assets`）。
+
 退出码：只要有一家取数成功就是 0；所有已配置的服务都失败时是 1；参数错误是 2。
 
 ## 给 Hermes Agent 用

@@ -31,6 +31,9 @@ func run() int {
 		timeout  = flag.Duration("timeout", 20*time.Second, "per-request timeout")
 		fromJSON = flag.String("from-json", "", "render a previously saved JSON report instead of fetching")
 		showVer  = flag.Bool("version", false, "print version and exit")
+		avatar   = flag.String("avatar", env("QUOTA_AVATAR", ""), "portrait for the image (PNG/JPEG path, or \"none\"); default is the built-in Wu [$QUOTA_AVATAR]")
+		persona  = flag.String("persona-name", env("QUOTA_PERSONA_NAME", render.DefaultPersona.Name), "name shown in the image [$QUOTA_PERSONA_NAME]")
+		tagline  = flag.String("persona-tagline", env("QUOTA_PERSONA_TAGLINE", render.DefaultPersona.Tagline), "motto shown in the image [$QUOTA_PERSONA_TAGLINE]")
 	)
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: quota [flags]\n\nCollects subscription usage from local logins.\n\nFlags:\n")
@@ -70,7 +73,7 @@ func run() int {
 		render.Text(os.Stdout, out)
 	}
 	if *pngPath != "" {
-		if err := render.PNG(*pngPath, out); err != nil {
+		if err := render.PNG(*pngPath, out, render.Persona{Avatar: *avatar, Name: *persona, Tagline: *tagline}); err != nil {
 			fmt.Fprintln(os.Stderr, "quota: writing image:", err)
 			return 1
 		}
@@ -142,4 +145,12 @@ func ids() string {
 		s = append(s, p.ID)
 	}
 	return strings.Join(s, ",")
+}
+
+// env returns the environment variable key, or def when it is unset.
+func env(key, def string) string {
+	if v, ok := os.LookupEnv(key); ok {
+		return v
+	}
+	return def
 }

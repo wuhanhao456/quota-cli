@@ -3,3 +3,4 @@
 /quota.exe
 *.png
 !examples/*.png
+!internal/render/assets/*.png
