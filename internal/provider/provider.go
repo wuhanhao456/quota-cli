@@ -68,6 +68,7 @@ func All() []Provider {
 		{ID: "chatgpt", Name: "ChatGPT (Codex)", Fetch: fetchCodex},
 		{ID: "commandcode", Name: "Command Code", Fetch: fetchCommandCode},
 		{ID: "ollama", Name: "Ollama Cloud", Fetch: fetchOllama},
+		{ID: "opencode", Name: "OpenCode Go", Fetch: fetchOpenCode},
 	}
 }
 
