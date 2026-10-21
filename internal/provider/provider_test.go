@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -86,11 +87,28 @@ func TestClaude(t *testing.T) {
 	}
 }
 
-func TestClaudeExpiredToken(t *testing.T) {
-	fakeHome(t, map[string]string{".claude/.credentials.json": `{"claudeAiOauth":{"accessToken":"tok","expiresAt":1000}}`})
-	r := Run(context.Background(), http.DefaultClient, All()[0])
-	if r.Status != "error" {
-		t.Fatalf("status = %s", r.Status)
+// A past expiresAt must not stop the request: the server decides, and the timestamp may lag.
+func TestClaudeStaleExpiresAtStillFetches(t *testing.T) {
+	for _, exp := range []string{"1000", "1700000000", "1700000000000"} {
+		fakeHome(t, map[string]string{".claude/.credentials.json": `{"claudeAiOauth":{"accessToken":"tok","expiresAt":` + exp + `}}`})
+		srv, _ := serve(t, map[string]string{"/api/oauth/usage": `{"five_hour":{"utilization":5}}`})
+		claudeUsageURL = srv.URL + "/api/oauth/usage"
+		if r := Run(context.Background(), srv.Client(), All()[0]); r.Status != "ok" || len(r.Windows) != 1 {
+			t.Fatalf("expiresAt=%s: %+v", exp, r)
+		}
+	}
+}
+
+func TestClaudeRejectedExpiredTokenExplains(t *testing.T) {
+	fakeHome(t, map[string]string{".claude/.credentials.json": `{"claudeAiOauth":{"accessToken":"tok","expiresAt":1700000000000}}`})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+	claudeUsageURL = srv.URL + "/api/oauth/usage"
+	r := Run(context.Background(), srv.Client(), All()[0])
+	if r.Status != "error" || !strings.Contains(r.Error, "HTTP 401") || !strings.Contains(r.Error, "expired at") {
+		t.Fatalf("got %+v", r)
 	}
 }
 
