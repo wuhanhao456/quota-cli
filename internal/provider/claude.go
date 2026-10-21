@@ -3,6 +3,7 @@ package provider
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"net/http"
 	"os"
@@ -44,6 +45,7 @@ var claudeWindows = []struct{ key, id, label string }{
 func fetchClaude(ctx context.Context, c *http.Client) (*Report, error) {
 	r := &Report{Source: "oauth"}
 	token := firstEnv("CLAUDE_OAUTH_TOKEN")
+	var expiresAt *time.Time
 	if token == "" {
 		path := claudeCredentialPath()
 		var creds claudeCredentials
@@ -58,9 +60,9 @@ func fetchClaude(ctx context.Context, c *http.Client) (*Report, error) {
 		if token == "" {
 			return r, unconfigured("%s has no claudeAiOauth.accessToken", path)
 		}
-		if exp := creds.OAuth.ExpiresAt; exp > 0 && time.Now().After(time.UnixMilli(int64(exp))) {
-			return r, errors.New("Claude Code token expired; run any `claude` command to refresh it")
-		}
+		// expiresAt is only used to explain a rejection: the server decides whether the
+		// token is still valid, and the file's timestamp can lag or use another unit.
+		expiresAt = timeOf(creds.OAuth.ExpiresAt)
 	}
 
 	var raw map[string]any
@@ -69,6 +71,11 @@ func fetchClaude(ctx context.Context, c *http.Client) (*Report, error) {
 		"anthropic-beta": "oauth-2025-04-20",
 	}, &raw)
 	if err != nil {
+		var he *httpError
+		if errors.As(err, &he) && he.Status == 401 && expiresAt != nil && time.Now().After(*expiresAt) {
+			return r, fmt.Errorf("%w; the Claude Code token expired at %s, run any `claude` command to refresh it",
+				err, expiresAt.Local().Format("2006-01-02 15:04"))
+		}
 		return r, err
 	}
 	for _, w := range claudeWindows {
