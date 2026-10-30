@@ -160,6 +160,20 @@ func TestCommandCode(t *testing.T) {
 	}
 }
 
+// Windows PowerShell 5.1 saves auth.json as UTF-8 with a BOM.
+func TestCommandCodeAuthFileWithBOM(t *testing.T) {
+	fakeHome(t, map[string]string{".commandcode/auth.json": "\ufeff{\"apiKey\":\"user_bom\"}"})
+	srv, auth := serve(t, map[string]string{
+		"/alpha/billing/credits":       `{"credits":{"monthlyCredits":1},"windowLimits":{}}`,
+		"/alpha/billing/subscriptions": `{"success":true,"data":{"planId":"individual-goat"}}`,
+	})
+	commandCodeBaseURL = srv.URL + "/alpha"
+
+	if r := Run(context.Background(), srv.Client(), All()[2]); r.Status != "ok" || *auth != "Bearer user_bom" {
+		t.Fatalf("got %+v", r)
+	}
+}
+
 // The CLI's credits response omits the grant; the plan sizes the month, and org keys are scoped.
 func TestCommandCodeOrgAndPlanGrant(t *testing.T) {
 	fakeHome(t, nil)

@@ -2,6 +2,7 @@
 package provider
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -148,7 +149,8 @@ func readJSONFile(path string, out any) error {
 	if err != nil {
 		return err
 	}
-	return json.Unmarshal(b, out)
+	// Windows PowerShell 5.1 writes UTF-8 with a BOM, which encoding/json rejects.
+	return json.Unmarshal(bytes.TrimPrefix(b, []byte("\xef\xbb\xbf")), out)
 }
 
 func firstEnv(names ...string) string {
