@@ -722,20 +722,22 @@ func (pt *painter) paceMark(x, y, h float64) {
 	diamond(dc, x, y, 2.8, true)
 }
 
-// elapsed returns how far through its window a quota is, for windows of known length.
+// elapsed returns how far through its window a quota is. The length comes from the
+// window's label ("Session (5h)", "Weekly", "Monthly credits"), which providers derive
+// from the real window size; windows of any other length get no marker.
 func elapsed(win provider.Window, now time.Time) (float64, bool) {
 	if win.ResetsAt == nil {
 		return 0, false
 	}
 	end := *win.ResetsAt
 	var start time.Time
-	id := strings.ToLower(win.ID)
+	label := strings.ToLower(win.Label)
 	switch {
-	case strings.HasSuffix(id, "session"):
+	case strings.Contains(label, "session"):
 		start = end.Add(-5 * time.Hour)
-	case strings.Contains(id, "weekly"):
+	case strings.Contains(label, "weekly"):
 		start = end.AddDate(0, 0, -7)
-	case strings.Contains(id, "monthly"):
+	case strings.Contains(label, "monthly"):
 		start = end.AddDate(0, -1, 0)
 	default:
 		return 0, false

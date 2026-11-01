@@ -3,11 +3,14 @@ package render
 import (
 	"encoding/json"
 	"image/png"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/wuhanhao456/quota-cli/internal/provider"
 )
 
 func loadSample(t *testing.T) Output {
@@ -89,6 +92,25 @@ func TestZh(t *testing.T) {
 	} {
 		if got := zh(in); got != want {
 			t.Errorf("zh(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestElapsed(t *testing.T) {
+	now := time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
+	reset := now.Add(time.Hour)
+	for _, c := range []struct {
+		label string
+		want  float64
+		ok    bool
+	}{
+		{"Session (5h)", 0.8, true},
+		{"Weekly", 1 - 1.0/168, true},
+		{"Window (24h)", 0, false}, // a non-5h primary window keeps the "session" id
+	} {
+		got, ok := elapsed(provider.Window{ID: "session", Label: c.label, ResetsAt: &reset}, now)
+		if ok != c.ok || (ok && math.Abs(got-c.want) > 1e-9) {
+			t.Errorf("%s: got %v %v, want %v %v", c.label, got, ok, c.want, c.ok)
 		}
 	}
 }
