@@ -24,14 +24,14 @@ func Text(w io.Writer, out Output) {
 		fmt.Fprintln(w, title)
 		switch r.Status {
 		case "unconfigured":
-			fmt.Fprintln(w, "  not configured: "+r.Error)
+			fmt.Fprintln(w, "  未配置："+r.Error)
 			continue
 		case "error":
-			fmt.Fprintln(w, "  error: "+r.Error)
+			fmt.Fprintln(w, "  出错："+r.Error)
 			continue
 		}
 		if len(r.Windows) == 0 && len(r.Details) == 0 {
-			fmt.Fprintln(w, "  no usage data reported")
+			fmt.Fprintln(w, "  没有返回用量数据")
 		}
 		for _, win := range r.Windows {
 			parts := []string{remaining(win)}
@@ -41,10 +41,10 @@ func Text(w io.Writer, out Output) {
 			if rt := resetText(win.ResetsAt, now); rt != "" {
 				parts = append(parts, rt)
 			}
-			fmt.Fprintf(w, "  %-22s %s %5.1f%%  %s\n", win.Label, bar(win.UsedPercent, 20), win.UsedPercent, strings.Join(parts, " · "))
+			fmt.Fprintf(w, "  %s %s %5.1f%%  %s\n", pad(zh(win.Label), 22), bar(win.UsedPercent, 20), win.UsedPercent, strings.Join(parts, " · "))
 		}
 		for _, d := range r.Details {
-			fmt.Fprintf(w, "  %-22s %s\n", d.Label, d.Value)
+			fmt.Fprintf(w, "  %s %s\n", pad(zh(d.Label), 22), zh(d.Value))
 		}
 	}
 }
@@ -52,4 +52,19 @@ func Text(w io.Writer, out Output) {
 func bar(pct float64, width int) string {
 	n := int(pct/100*float64(width) + 0.5)
 	return strings.Repeat("█", n) + strings.Repeat("░", width-n)
+}
+
+// pad right-pads s to n terminal columns, counting CJK characters as two columns.
+func pad(s string, n int) string {
+	w := 0
+	for _, r := range s {
+		w++
+		if r >= 0x1100 && (r <= 0x115f || r >= 0x2e80) {
+			w++
+		}
+	}
+	if w >= n {
+		return s
+	}
+	return s + strings.Repeat(" ", n-w)
 }

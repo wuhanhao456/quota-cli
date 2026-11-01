@@ -59,7 +59,7 @@ func TestPNGMissingAvatar(t *testing.T) {
 func TestText(t *testing.T) {
 	var sb strings.Builder
 	Text(&sb, loadSample(t))
-	for _, want := range []string{"Claude  [Max]", "$49.00 left", "not configured: set OLLAMA_API_KEY"} {
+	for _, want := range []string{"Claude  [Max]", "剩余 $49.00", "已用 $21.00 / $70.00", "未配置：set OLLAMA_API_KEY", "每周（全部模型）"} {
 		if !strings.Contains(sb.String(), want) {
 			t.Errorf("missing %q in:\n%s", want, sb.String())
 		}
@@ -76,5 +76,19 @@ func TestAutoTheme(t *testing.T) {
 	}
 	if _, err := themeFor("sepia", at(12)); err == nil {
 		t.Error("expected an error for an unknown theme")
+	}
+}
+
+func TestZh(t *testing.T) {
+	for in, want := range map[string]string{
+		"Session (5h)":             "5 小时会话",
+		"Weekly (Sonnet)":          "每周（Sonnet）",
+		"GPT-5-Codex-Spark Weekly": "GPT-5-Codex-Spark 每周",
+		"Window (12h)":             "12 小时窗口",
+		"Something new":            "Something new",
+	} {
+		if got := zh(in); got != want {
+			t.Errorf("zh(%q) = %q, want %q", in, got, want)
+		}
 	}
 }

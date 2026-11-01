@@ -34,40 +34,42 @@ func amount(win provider.Window) string {
 		return ""
 	}
 	if win.Unit == "usd" {
-		return fmt.Sprintf("$%.2f / $%.2f", *win.Used, *win.Limit)
+		return fmt.Sprintf("已用 $%.2f / $%.2f", *win.Used, *win.Limit)
 	}
-	return fmt.Sprintf("%g / %g", *win.Used, *win.Limit)
+	return fmt.Sprintf("已用 %g / %g", *win.Used, *win.Limit)
 }
 
 func remaining(win provider.Window) string {
 	if win.Remaining != nil && win.Unit == "usd" {
-		return fmt.Sprintf("$%.2f left", *win.Remaining)
+		return fmt.Sprintf("剩余 $%.2f", *win.Remaining)
 	}
-	return fmt.Sprintf("%.0f%% left", 100-win.UsedPercent)
+	return fmt.Sprintf("剩余 %.0f%%", 100-win.UsedPercent)
 }
 
-// resetText renders "resets in 3h 12m (Oct 21 14:00)" in the local time zone.
+// resetText renders "3小时12分后重置 · 10月21日 14:00" in the local time zone.
 func resetText(t *time.Time, now time.Time) string {
 	if t == nil {
 		return ""
 	}
 	d := t.Sub(now)
-	when := t.Local().Format("Jan 2 15:04")
+	when := t.Local().Format("1月2日 15:04")
 	if d <= 0 {
-		return "reset due (" + when + ")"
+		return "已到重置时间 · " + when
 	}
-	return "resets in " + duration(d) + " (" + when + ")"
+	return duration(d) + "后重置 · " + when
 }
 
 func duration(d time.Duration) string {
 	m := int(math.Ceil(d.Minutes()))
 	days, hours, mins := m/1440, (m%1440)/60, m%60
 	switch {
+	case days > 0 && hours == 0:
+		return fmt.Sprintf("%d天", days)
 	case days > 0:
-		return fmt.Sprintf("%dd %dh", days, hours)
+		return fmt.Sprintf("%d天%d小时", days, hours)
 	case hours > 0:
-		return fmt.Sprintf("%dh %dm", hours, mins)
+		return fmt.Sprintf("%d小时%d分", hours, mins)
 	default:
-		return fmt.Sprintf("%dm", mins)
+		return fmt.Sprintf("%d分钟", mins)
 	}
 }
