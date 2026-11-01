@@ -1,8 +1,16 @@
-Copyright 2015 the Cormorant Project Authors (github.com/CatharsisFonts/Cormorant)
+WuSans-SC.ttf is a subset of Noto Sans CJK SC Regular:
+Copyright © 2014, 2015 Adobe Systems Incorporated (http://www.adobe.com/), with Reserved Font Name 'Source'.
+
+WuSerif-SC.ttf is a subset of Source Han Serif SC Regular:
+Copyright © 2017 Adobe Systems Incorporated (http://www.adobe.com/), with Reserved Font Name 'Source'.
+
+Both were cut down to ASCII, Latin-1, common punctuation and the 3,755 level-1
+GB2312 hanzi, converted to TrueType outlines, and renamed because they are
+Modified Versions under the license below.
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
-https://scripts.sil.org/OFL
+http://scripts.sil.org/OFL
 
 
 -----------------------------------------------------------
