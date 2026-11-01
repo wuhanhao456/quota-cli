@@ -34,6 +34,7 @@ func run() int {
 		avatar   = flag.String("avatar", env("QUOTA_AVATAR", ""), "portrait for the image (PNG/JPEG path, or \"none\"); default is the built-in Wu [$QUOTA_AVATAR]")
 		persona  = flag.String("persona-name", env("QUOTA_PERSONA_NAME", render.DefaultPersona.Name), "name shown in the image [$QUOTA_PERSONA_NAME]")
 		tagline  = flag.String("persona-tagline", env("QUOTA_PERSONA_TAGLINE", render.DefaultPersona.Tagline), "motto shown in the image [$QUOTA_PERSONA_TAGLINE]")
+		theme    = flag.String("theme", env("QUOTA_THEME", render.DefaultPersona.Theme), "image theme: "+strings.Join(render.Themes, " or ")+" [$QUOTA_THEME]")
 	)
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: quota [flags]\n\nCollects subscription usage from local logins.\n\nFlags:\n")
@@ -73,7 +74,7 @@ func run() int {
 		render.Text(os.Stdout, out)
 	}
 	if *pngPath != "" {
-		if err := render.PNG(*pngPath, out, render.Persona{Avatar: *avatar, Name: *persona, Tagline: *tagline}); err != nil {
+		if err := render.PNG(*pngPath, out, render.Persona{Avatar: *avatar, Name: *persona, Tagline: *tagline, Theme: *theme}); err != nil {
 			fmt.Fprintln(os.Stderr, "quota: writing image:", err)
 			return 1
 		}

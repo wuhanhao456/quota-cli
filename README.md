@@ -9,6 +9,10 @@
 
 ![sample](examples/sample.png)
 
+加 `--theme night` 是月夜主题：
+
+![sample night](examples/sample-night.png)
+
 ## 安装
 
 从 Releases 下载对应平台的二进制，或者自己编译：
@@ -37,7 +41,9 @@ quota --png quota.png --avatar ./me.png --persona-name "LUNA" --persona-tagline 
 quota --png quota.png --avatar none    # 不要立绘，只保留数据卡片
 ```
 
-也可以用环境变量 `QUOTA_AVATAR`、`QUOTA_PERSONA_NAME`、`QUOTA_PERSONA_TAGLINE` 设默认值（方便 Hermes 这类 agent 调用时不用带参数）。立绘建议用透明背景的 PNG。图里的字体是 Cinzel 和 Cormorant Garamond（SIL OFL 1.1，见 `internal/render/assets`）。
+图片有 `day`（默认，白瓷底，对应主设定图）和 `night`（月夜星空，对应月下矢车菊那张图）两套主题，用 `--theme` 选。左栏下方会列出余量最少的一项（TIGHTEST QUOTA）；进度条上的金色小刻度表示这个周期已经过去了多少时间，用量条超过刻度就说明用得比平均快。
+
+也可以用环境变量 `QUOTA_AVATAR`、`QUOTA_PERSONA_NAME`、`QUOTA_PERSONA_TAGLINE`、`QUOTA_THEME` 设默认值（方便 Hermes 这类 agent 调用时不用带参数）。立绘建议用透明背景的 PNG。图里的字体是 Cinzel 和 Cormorant Garamond（SIL OFL 1.1，见 `internal/render/assets`）。
 
 退出码：只要有一家取数成功就是 0；所有已配置的服务都失败时是 1；参数错误是 2。
 
