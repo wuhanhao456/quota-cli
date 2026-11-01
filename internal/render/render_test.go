@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func loadSample(t *testing.T) Output {
@@ -62,5 +63,18 @@ func TestText(t *testing.T) {
 		if !strings.Contains(sb.String(), want) {
 			t.Errorf("missing %q in:\n%s", want, sb.String())
 		}
+	}
+}
+
+func TestAutoTheme(t *testing.T) {
+	at := func(h int) time.Time { return time.Date(2026, 11, 1, h, 0, 0, 0, time.Local) }
+	for h, dark := range map[int]bool{5: true, 6: false, 12: false, 17: false, 18: true, 23: true} {
+		p, err := themeFor("auto", at(h))
+		if err != nil || p.dark != dark {
+			t.Errorf("auto at %02d:00: dark=%v err=%v, want dark=%v", h, p.dark, err, dark)
+		}
+	}
+	if _, err := themeFor("sepia", at(12)); err == nil {
+		t.Error("expected an error for an unknown theme")
 	}
 }

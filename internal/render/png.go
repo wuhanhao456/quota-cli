@@ -41,14 +41,14 @@ type Persona struct {
 	Avatar  string // image file (PNG/JPEG); "" uses the built-in portrait, "none" hides the portrait panel
 	Name    string
 	Tagline string
-	Theme   string // "day" (default) or "night"
+	Theme   string // "auto" (default: night from 18:00 to 06:00 local time), "day" or "night"
 }
 
 // DefaultPersona is the built-in character, Wu.
-var DefaultPersona = Persona{Name: "WU", Tagline: "A calmer mind, a wider world.", Theme: "day"}
+var DefaultPersona = Persona{Name: "WU", Tagline: "A calmer mind, a wider world.", Theme: "auto"}
 
 // Themes lists the accepted values of Persona.Theme.
-var Themes = []string{"day", "night"}
+var Themes = []string{"auto", "day", "night"}
 
 // The image is laid out in logical pixels and drawn at scale for sharp text on HiDPI screens.
 const (
@@ -79,7 +79,6 @@ type palette struct {
 	sky, cobalt, royal, navy, gold, rose       color.Color
 	flower, flowerLight, pace                  color.Color
 	shadowAlpha                                float64
-	swatches                                   []color.Color
 }
 
 var dayTheme = palette{
@@ -91,7 +90,6 @@ var dayTheme = palette{
 	gold: hex("#B8925A"), rose: hex("#D45B7A"),
 	flower: hex("#3F6FE8"), flowerLight: hex("#8FB0F5"), pace: hex("#212952"),
 	shadowAlpha: 0.05,
-	swatches:    []color.Color{hex("#1B2C6E"), hex("#1E5AE6"), hex("#4E89FB"), hex("#A9C3F7"), hex("#F4F6FC"), hex("#3B3F55")},
 }
 
 var nightTheme = palette{
@@ -104,17 +102,21 @@ var nightTheme = palette{
 	gold: hex("#E3C489"), rose: hex("#FF7E9C"),
 	flower: hex("#4F7BF0"), flowerLight: hex("#9DB9FF"), pace: hex("#F2F5FF"),
 	shadowAlpha: 0.25,
-	swatches:    []color.Color{hex("#0B1838"), hex("#1E5AE6"), hex("#6FA3FF"), hex("#A9C3F7"), hex("#F4F6FC"), hex("#E3C489")},
 }
 
-func themeFor(name string) (palette, error) {
+func themeFor(name string, now time.Time) (palette, error) {
 	switch strings.ToLower(name) {
-	case "", "day", "light":
+	case "", "auto":
+		if h := now.Local().Hour(); h >= 18 || h < 6 {
+			return nightTheme, nil
+		}
+		return dayTheme, nil
+	case "day", "light":
 		return dayTheme, nil
 	case "night", "dark":
 		return nightTheme, nil
 	}
-	return palette{}, fmt.Errorf("unknown theme %q (want %s)", name, strings.Join(Themes, " or "))
+	return palette{}, fmt.Errorf("unknown theme %q (want %s)", name, strings.Join(Themes, ", "))
 }
 
 var accents = map[string]string{
@@ -192,7 +194,7 @@ func PNG(path string, out Output, p Persona) error {
 }
 
 func renderPNG(path string, out Output, p Persona, now time.Time) error {
-	t, err := themeFor(p.Theme)
+	t, err := themeFor(p.Theme, now)
 	if err != nil {
 		return err
 	}
@@ -419,19 +421,6 @@ func (pt *painter) persona(p Persona, avatar image.Image, tight *low, x, y, w, h
 	dc.SetColor(t.cobalt)
 	drawSpaced(dc, "QUOTA LEDGER", cx, top+20, 2.4, 0.5)
 	top += 34
-	// Her colour swatches, as on the sheet.
-	sw := 13.0
-	sx := cx - (float64(len(t.swatches))*sw+float64(len(t.swatches)-1)*6)/2 + sw/2
-	for i, c := range t.swatches {
-		dc.SetColor(c)
-		dc.DrawCircle((sx+float64(i)*(sw+6))*scale, (top+2)*scale, sw/2*scale)
-		dc.Fill()
-		dc.SetColor(withAlpha(t.hairline, 0.6))
-		dc.SetLineWidth(0.6 * scale)
-		dc.DrawCircle((sx+float64(i)*(sw+6))*scale, (top+2)*scale, sw/2*scale)
-		dc.Stroke()
-	}
-	top += 18
 
 	// Reserve the bottom for the "lowest remaining" callout and the motto.
 	bottomH := 0.0

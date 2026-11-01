@@ -9,7 +9,7 @@
 
 ![sample](examples/sample.png)
 
-加 `--theme night` 是月夜主题：
+晚上（本地时间 18:00 到次日 6:00）会自动换成月夜主题：
 
 ![sample night](examples/sample-night.png)
 
@@ -41,7 +41,7 @@ quota --png quota.png --avatar ./me.png --persona-name "LUNA" --persona-tagline 
 quota --png quota.png --avatar none    # 不要立绘，只保留数据卡片
 ```
 
-图片有 `day`（默认，白瓷底，对应主设定图）和 `night`（月夜星空，对应月下矢车菊那张图）两套主题，用 `--theme` 选。左栏下方会列出余量最少的一项（TIGHTEST QUOTA）；进度条上的金色小刻度表示这个周期已经过去了多少时间，用量条超过刻度就说明用得比平均快。
+图片有 `day`（白瓷底，对应主设定图）和 `night`（月夜星空，对应月下矢车菊那张图）两套主题，默认 `--theme auto` 按本地时间自动切换（18:00 到次日 6:00 用 night），也可以用 `--theme day` 或 `--theme night` 固定。左栏下方会列出余量最少的一项（TIGHTEST QUOTA）；进度条上的金色小刻度表示这个周期已经过去了多少时间，用量条超过刻度就说明用得比平均快。
 
 也可以用环境变量 `QUOTA_AVATAR`、`QUOTA_PERSONA_NAME`、`QUOTA_PERSONA_TAGLINE`、`QUOTA_THEME` 设默认值（方便 Hermes 这类 agent 调用时不用带参数）。立绘建议用透明背景的 PNG。图里的字体是 Cinzel 和 Cormorant Garamond（SIL OFL 1.1，见 `internal/render/assets`）。
 
